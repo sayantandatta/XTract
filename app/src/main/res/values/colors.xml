@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#0F1419</color>
+    <!-- X's light palette. -->
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_alt">#F7F9F9</color>
+    <color name="text">#0F1419</color>
+    <color name="muted">#536471</color>
+    <color name="inactive">#AAB8C2</color>
+    <color name="hairline">#EFF3F4</color>
+    <color name="accent">#1D9BF0</color>
+    <color name="pdf">#E5322D</color>
+    <color name="claude">#D97757</color>
+    <color name="ic_launcher_background">#1D9BF0</color>
 </resources>

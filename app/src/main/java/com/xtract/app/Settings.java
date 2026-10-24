@@ -3,29 +3,13 @@ package com.xtract.app;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/** App preferences: colour scheme and the page to reopen at launch. */
+/** App preferences: the page to reopen at launch. */
 final class Settings {
 
     private final SharedPreferences prefs;
 
     Settings(Context ctx) {
         prefs = ctx.getSharedPreferences("xtract", Context.MODE_PRIVATE);
-    }
-
-    String theme() {
-        return prefs.getString("theme", AppTheme.LIGHT);
-    }
-
-    void setTheme(String id) {
-        prefs.edit().putString("theme", id).apply();
-    }
-
-    int disguiseVersion() {
-        return prefs.getInt("disguise", 0);
-    }
-
-    void setDisguiseVersion(int v) {
-        prefs.edit().putInt("disguise", v).apply();
     }
 
     String lastUrl() {

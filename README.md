@@ -35,12 +35,9 @@ prepared for printing.
 
 ## Look and feel
 
-The app's own bars use X's colour schemes. Tap the title → *Theme* to choose **Light** (the default), **Dim**,
-**Lights out** or **Follow system**. The x.com page inside keeps whatever display setting your X account has
-(X → Settings → Display), so pick the matching one there if you want the two to blend. The app deliberately
-does not touch X's cookies.
-
-Links that lead away from X open in your phone's browser. Hardware/gesture back goes back inside X.
+A single light theme in X's palette: white bars, hairline dividers, X blue for the brand and the dial, and three
+rounded action tiles at the bottom. The tiles are greyed out until you open a post. A thin blue line under the top
+bar shows while X is loading a page. The x.com page itself keeps whatever display setting your X account has.
 
 ## Install
 
@@ -92,16 +89,6 @@ npm i playwright && node test/scraper.test.js
 - The collector depends on X's page markup (`article[data-testid="tweet"]`, `tweetText`, `User-Name`). If X
   changes its markup, update `app/src/main/assets/scraper.js`.
 - "Sign in with Google" doesn't work inside embedded browsers. Use your X username and password.
-- X refuses logins from anything it recognises as an embedded browser ("Sorry, you are not allowed to log in at
-  this time"). `WebViewDisguise.java` removes the four tells: the WebView user-agent string, the
-  `X-Requested-With` header, the `Android WebView` client-hint brand, and the missing `window.chrome` object.
-  All but the first need a reasonably current Android System WebView (update it in Google Play if the message
-  persists). When the disguise changes between app versions, the app starts from clean cookies so X does not
-  reuse an earlier verdict. If the message still appears: title menu → *Reset X session*, wait fifteen minutes
-  (X also rate-limits repeated attempts and some VPN addresses), and try again. Two diagnostic views live in the
-  title menu: *Browser check* shows what X sees (user agent, client hints, headers as received by an echo
-  server), and *Diagnostics* shows which disguise steps applied plus recent page console/HTTP errors — useful
-  when a page loads blank.
 - Very large threads take a while to collect, roughly one screen per second.
 - The icons for PDF and Print are Material Design glyphs; the Claude button uses a generic starburst, not
   Anthropic's trademarked logo.
@@ -112,17 +99,15 @@ npm i playwright && node test/scraper.test.js
 app/src/main/
   AndroidManifest.xml
   assets/scraper.js            auto-scroll + collect script injected into x.com
-  java/org/chromium/support_lib_boundary/  WebView support-library boundary interfaces (names must match)
   java/com/xtract/app/
     MainActivity.java          screen, actions, jobs (collect → PDF / Claude / print)
     ProgressDial.java          the ring in the top bar
-    AppTheme.java              Light / Dim / Lights out colours
     ThreadScraper.java         JS bridge for scraper.js
     ThreadData.java            collected posts + plain-text rendering
     PdfExporter.java           thread PDF (android.graphics.pdf)
     Downloads.java             saves files to Downloads/XTract via MediaStore
     ClaudeShare.java           share to the Claude app / Play Store link
-    Settings.java              theme + last page
+    Settings.java              last page
   res/drawable/                vector icons
 scripts/build-apk.sh           SDK-less build
 dist/XTract.apk                prebuilt APK

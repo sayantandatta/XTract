@@ -30,20 +30,17 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
-import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
-import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -56,7 +53,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -73,13 +69,13 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
     private Settings settings;
-    private AppTheme theme;
     private ThreadScraper scraper;
 
     private WebView web;
+    private ProgressBar pageLoad;
     private ProgressDial dial;
     private TextView caption;
-    private final List<View> actions = new ArrayList<>();
+    private final List<ActionTile> actions = new ArrayList<>();
 
     private ThreadData thread;          // last collected thread
     private Job pendingJob;             // what to do once collection finishes
@@ -89,46 +85,27 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
     private boolean onThread;           // current page is a post
     private int captionGeneration;
 
+    /** One of the three bottom-bar actions. */
+    private static final class ActionTile {
+        LinearLayout root;
+        ImageView icon;
+        TextView label;
+        int color;
+    }
+
     @Override
     protected void onCreate(Bundle state) {
-        settings = new Settings(this);
-        theme = AppTheme.resolve(this, settings.theme());
-        setTheme(theme.styleRes);
         super.onCreate(state);
+        settings = new Settings(this);
         scraper = new ThreadScraper(this, this);
         setContentView(buildUi());
-        getWindow().setStatusBarColor(theme.background);
-        getWindow().setNavigationBarColor(theme.background);
         setupWebView();
         clearPrintCache();
 
         String shared = sharedThreadUrl(getIntent());
-        if (settings.disguiseVersion() != WebViewDisguise.VERSION) {
-            // The browser fingerprint changed. X may have flagged the old one in its cookies,
-            // so start this version from a clean session.
-            settings.setDisguiseVersion(WebViewDisguise.VERSION);
-            resetSession(shared != null ? shared : settings.lastUrl());
-        } else {
-            if (state != null) web.restoreState(state);
-            if (shared != null) web.loadUrl(shared);
-            else if (state == null) web.loadUrl(settings.lastUrl());
-        }
-    }
-
-    /** Clears cookies, storage and cache (logs out of X), then loads {@code thenLoad}. */
-    private void resetSession(final String thenLoad) {
-        thread = null;
-        WebStorage.getInstance().deleteAllData();
-        web.clearCache(true);
-        web.clearHistory();
-        final CookieManager cm = CookieManager.getInstance();
-        cm.removeAllCookies(new ValueCallback<Boolean>() {
-            @Override
-            public void onReceiveValue(Boolean removed) {
-                cm.flush();
-                web.loadUrl(thenLoad);
-            }
-        });
+        if (state != null) web.restoreState(state);
+        if (shared != null) web.loadUrl(shared);
+        else if (state == null) web.loadUrl(settings.lastUrl());
     }
 
     @Override
@@ -167,22 +144,30 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
 
     // ---------------------------------------------------------------- UI
 
+    private int color(int res) {
+        return getColor(res);
+    }
+
+    private int dp(float v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
+    }
+
     private View buildUi() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(theme.background);
+        root.setBackgroundColor(color(R.color.surface));
 
-        // Top bar: brand on the left, status caption and progress dial on the right.
+        // Top bar: brand on the left (tap for menu), status caption and progress dial on the right.
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(dp(8), 0, dp(12), 0);
+        top.setPadding(dp(6), 0, dp(16), 0);
 
         LinearLayout brand = new LinearLayout(this);
         brand.setOrientation(LinearLayout.HORIZONTAL);
         brand.setGravity(Gravity.CENTER_VERTICAL);
-        brand.setPadding(dp(8), dp(8), dp(10), dp(8));
-        brand.setBackgroundResource(rippleBackground());
+        brand.setPadding(dp(10), dp(8), dp(12), dp(8));
+        brand.setBackgroundResource(ripple());
         brand.setContentDescription("XTract menu");
         brand.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -192,21 +177,22 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         });
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.ic_logo);
-        brand.addView(logo, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        brand.addView(logo, new LinearLayout.LayoutParams(dp(24), dp(24)));
         TextView title = new TextView(this);
         SpannableString name = new SpannableString("XTract");
-        name.setSpan(new ForegroundColorSpan(AppTheme.ACCENT), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        name.setSpan(new ForegroundColorSpan(color(R.color.accent)), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         title.setText(name);
-        title.setTextColor(theme.text);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextColor(color(R.color.text));
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 19);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        title.setLetterSpacing(-0.01f);
         title.setPadding(dp(8), 0, 0, 0);
         brand.addView(title);
         top.addView(brand);
 
         caption = new TextView(this);
         caption.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        caption.setTextColor(theme.muted);
+        caption.setTextColor(color(R.color.muted));
         caption.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         caption.setSingleLine(true);
         caption.setEllipsize(TextUtils.TruncateAt.END);
@@ -214,7 +200,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         top.addView(caption, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
         dial = new ProgressDial(this);
-        dial.setColors(theme.border, AppTheme.ACCENT, theme.text);
+        dial.setColors(color(R.color.hairline), color(R.color.accent), color(R.color.text));
         dial.setContentDescription("Progress");
         dial.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -222,80 +208,90 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                 if (scraper.isRunning()) finishCollectingEarly();
             }
         });
-        top.addView(dial, new LinearLayout.LayoutParams(dp(40), dp(40)));
-        root.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
-        root.addView(hairline());
+        top.addView(dial, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        root.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
 
+        // Page area, with a hairline on top and a thin loading line over it while X loads.
+        FrameLayout page = new FrameLayout(this);
         web = new WebView(this);
-        web.setBackgroundColor(theme.background);
-        web.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        root.addView(web, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        web.setBackgroundColor(color(R.color.surface));
+        page.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        View topLine = new View(this);
+        topLine.setBackgroundColor(color(R.color.hairline));
+        page.addView(topLine, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1))));
+        pageLoad = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        pageLoad.setMax(100);
+        pageLoad.setProgressTintList(android.content.res.ColorStateList.valueOf(color(R.color.accent)));
+        pageLoad.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x00000000));
+        pageLoad.setVisibility(View.INVISIBLE);
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(2));
+        plp.topMargin = -dp(1); // the bar's drawable has a little inner padding; tuck it onto the hairline
+        page.addView(pageLoad, plp);
+        root.addView(page, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
-        // Bottom bar: the three actions from the sketch.
-        root.addView(hairline());
+        // Bottom bar: the three actions from the sketch, as rounded tiles.
+        View bottomLine = new View(this);
+        bottomLine.setBackgroundColor(color(R.color.hairline));
+        root.addView(bottomLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1))));
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.addView(action(R.drawable.ic_pdf, "PDF", AppTheme.PDF_RED, "Download the thread as a PDF", Job.PDF));
-        bar.addView(action(R.drawable.ic_claude, "Claude", AppTheme.CLAUDE_CLAY, "Share the thread to Claude", Job.CLAUDE));
-        bar.addView(action(R.drawable.ic_print, "Print", theme.text, "Print the thread", Job.PRINT));
-        root.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)));
-        setOnThread(false);
+        bar.setPadding(dp(11), dp(10), dp(11), dp(12));
+        bar.addView(action(R.drawable.ic_pdf, "PDF", color(R.color.pdf), "Download the thread as a PDF", Job.PDF));
+        bar.addView(action(R.drawable.ic_claude, "Claude", color(R.color.claude), "Share the thread to Claude", Job.CLAUDE));
+        bar.addView(action(R.drawable.ic_print, "Print", color(R.color.text), "Print the thread", Job.PRINT));
+        root.addView(bar);
+        refreshActions();
         return root;
     }
 
     private View action(int icon, String label, int tint, String description, final Job job) {
-        LinearLayout cell = new LinearLayout(this);
-        cell.setOrientation(LinearLayout.VERTICAL);
-        cell.setGravity(Gravity.CENTER);
-        cell.setBackgroundResource(rippleBackground());
-        cell.setContentDescription(description);
-        cell.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        ImageView iv = new ImageView(this);
-        iv.setImageResource(icon);
-        iv.setColorFilter(tint);
-        cell.addView(iv, new LinearLayout.LayoutParams(dp(26), dp(26)));
-        TextView tv = new TextView(this);
-        tv.setText(label);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        tv.setTextColor(theme.text);
-        tv.setPadding(0, dp(3), 0, 0);
-        cell.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        cell.setOnClickListener(new View.OnClickListener() {
+        ActionTile a = new ActionTile();
+        a.color = tint;
+        a.root = new LinearLayout(this);
+        a.root.setOrientation(LinearLayout.VERTICAL);
+        a.root.setGravity(Gravity.CENTER);
+        a.root.setBackgroundResource(R.drawable.action_bg);
+        a.root.setContentDescription(description);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(62), 1);
+        lp.setMargins(dp(5), 0, dp(5), 0);
+        a.root.setLayoutParams(lp);
+        a.icon = new ImageView(this);
+        a.icon.setImageResource(icon);
+        a.root.addView(a.icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        a.label = new TextView(this);
+        a.label.setText(label);
+        a.label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        a.label.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        a.label.setPadding(0, dp(4), 0, 0);
+        a.root.addView(a.label, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        a.root.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 startJob(job);
             }
         });
-        actions.add(cell);
-        return cell;
+        actions.add(a);
+        return a.root;
     }
 
-    private View hairline() {
-        View v = new View(this);
-        v.setBackgroundColor(theme.border);
-        v.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1) / 2)));
-        return v;
-    }
-
-    private int rippleBackground() {
+    private int ripple() {
         TypedValue tv = new TypedValue();
-        getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true);
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
         return tv.resourceId;
     }
 
-    private int dp(int v) {
-        return Math.round(v * getResources().getDisplayMetrics().density);
-    }
-
+    /** Actions stay tappable off a post (they explain what to do) but look inactive. */
     private void refreshActions() {
-        boolean enabled = onThread && !busy;
-        for (View a : actions) {
-            a.setEnabled(enabled);
-            a.setAlpha(enabled ? 1f : 0.35f);
+        boolean active = onThread && !busy;
+        for (ActionTile a : actions) {
+            a.root.setEnabled(!busy);
+            a.icon.setColorFilter(active ? a.color : color(R.color.inactive));
+            a.label.setTextColor(active ? color(R.color.text) : color(R.color.inactive));
         }
     }
 
     private void setOnThread(boolean on) {
+        if (on == onThread) return;
         onThread = on;
         refreshActions();
     }
@@ -320,7 +316,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
     }
 
     private void toast(String s) {
-        Toast.makeText(this, s, Toast.LENGTH_LONG).show();
+        Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
     }
 
     // ---------------------------------------------------------------- WebView
@@ -334,7 +330,8 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         s.setSupportMultipleWindows(false);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
-        WebViewDisguise.apply(web); // X refuses to log in from anything it recognises as a WebView
+        // Some sites refuse embedded WebViews; present as the regular mobile Chrome build.
+        s.setUserAgentString(s.getUserAgentString().replace("; wv", ""));
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
 
@@ -343,20 +340,10 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                Uri url = request.getUrl();
-                String scheme = url.getScheme();
-                if ("http".equals(scheme) || "https".equals(scheme)) {
-                    if (!request.isForMainFrame() || isXHost(url.getHost())) return false;
-                    // Links that leave X open in the phone's browser; this app is only for X.
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, url));
-                    } catch (ActivityNotFoundException e) {
-                        return false;
-                    }
-                    return true;
-                }
+                String scheme = request.getUrl().getScheme();
+                if ("http".equals(scheme) || "https".equals(scheme)) return false;
                 try {
-                    startActivity(Intent.parseUri(url.toString(), Intent.URI_INTENT_SCHEME));
+                    startActivity(Intent.parseUri(request.getUrl().toString(), Intent.URI_INTENT_SCHEME));
                 } catch (Exception ignored) {
                 }
                 return true;
@@ -371,51 +358,14 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
                 onUrlChanged(url, false); // X is a single-page app; most navigations only change history
             }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                Diag.add("loaded " + url);
-            }
-
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
-                if (req.isForMainFrame()) {
-                    String msg = "page error " + err.getErrorCode() + " (" + err.getDescription() + ") on " + req.getUrl();
-                    Diag.add(msg);
-                    setCaption("Page didn't load — menu → Diagnostics", true);
-                }
-            }
-
-            @Override
-            public void onReceivedHttpError(WebView view, WebResourceRequest req, WebResourceResponse resp) {
-                if (req.isForMainFrame()) {
-                    Diag.add("HTTP " + resp.getStatusCode() + " on " + req.getUrl());
-                    setCaption("X returned HTTP " + resp.getStatusCode() + " — menu → Diagnostics", true);
-                }
-            }
         });
-
         web.setWebChromeClient(new WebChromeClient() {
             @Override
-            public boolean onConsoleMessage(ConsoleMessage m) {
-                if (m.messageLevel() == ConsoleMessage.MessageLevel.ERROR
-                        || m.messageLevel() == ConsoleMessage.MessageLevel.WARNING) {
-                    String src = m.sourceId() == null ? "" : m.sourceId().replaceAll("^https?://", "");
-                    Diag.add(m.messageLevel() + ": " + m.message()
-                            + (src.isEmpty() ? "" : " [" + src + ":" + m.lineNumber() + "]"));
-                }
-                return true;
+            public void onProgressChanged(WebView view, int p) {
+                pageLoad.setProgress(p);
+                pageLoad.setVisibility(p >= 100 ? View.INVISIBLE : View.VISIBLE);
             }
         });
-    }
-
-    private static boolean isXHost(String host) {
-        if (host == null) return true;
-        host = host.toLowerCase();
-        return host.equals("x.com") || host.endsWith(".x.com")
-                || host.equals("twitter.com") || host.endsWith(".twitter.com")
-                || host.equals("t.co") || host.endsWith(".twimg.com")
-                || host.equals("appleid.apple.com") || host.equals("accounts.google.com");
     }
 
     /** A full page load kills the injected script; a history change to another post makes its results wrong. */
@@ -438,7 +388,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         if (busy) return;
         String id = ThreadData.statusId(web.getUrl());
         if (id == null) {
-            toast("Open a post first.");
+            toast("Open a post first");
             return;
         }
         if (job == Job.CLAUDE && !ClaudeShare.isInstalled(this)) {
@@ -460,14 +410,14 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
 
     private void finishCollectingEarly() {
         scraper.stop(web);
-        setCaption("Finishing with what has loaded…", false);
+        setCaption("Finishing with what's loaded…", false);
     }
 
     @Override
     public void onScrapeProgress(int posts, int expanded, double fraction) {
         collectShown = Math.max(collectShown, (float) fraction * COLLECT_SHARE);
         dial.setProgress(collectShown);
-        setCaption(posts + (posts == 1 ? " post" : " posts") + " · tap the dial to stop", false);
+        setCaption(posts + (posts == 1 ? " post" : " posts") + " · tap dial to stop", false);
     }
 
     @Override
@@ -484,7 +434,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
             if (job != null) runJob(job);
             else finishJob(t.posts.size() + " posts collected");
         } catch (JSONException e) {
-            failJob("Could not read the collected posts.");
+            failJob("Couldn't read the collected posts.");
         }
     }
 
@@ -558,11 +508,12 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                 try (PdfExporter.Document d = PdfExporter.render(t, pdfProgress())) {
                     final Uri uri = PdfExporter.saveToDownloads(MainActivity.this, d);
                     final int pages = d.pages;
+                    final String fileName = d.fileName;
                     ui.post(new Runnable() {
                         @Override
                         public void run() {
                             finishJob("Saved · " + pages + (pages == 1 ? " page" : " pages"));
-                            offerFile(uri, d.fileName);
+                            offerFile(uri, fileName);
                         }
                     });
                 } catch (IOException | RuntimeException e) {
@@ -584,7 +535,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                         try {
                             startActivity(view);
                         } catch (ActivityNotFoundException e) {
-                            toast("No PDF viewer installed.");
+                            toast("No PDF viewer installed");
                         }
                     }
                 })
@@ -620,7 +571,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                         }
                     });
                 } catch (IOException | RuntimeException e) {
-                    postFailure("Could not prepare the thread", e);
+                    postFailure("Couldn't prepare the thread", e);
                 }
             }
         });
@@ -628,10 +579,10 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
 
     private void showGetClaude() {
         new AlertDialog.Builder(this)
-                .setTitle("Claude isn't installed")
-                .setMessage("XTract sends the thread to the Claude app, which finds the trending ideas and writes "
-                        + "the summary. Install Claude from Google Play, then tap Claude again.")
-                .setPositiveButton("Get Claude", new DialogInterface.OnClickListener() {
+                .setTitle("Get the Claude app")
+                .setMessage("XTract sends the thread to the Claude app, which finds the trending ideas and "
+                        + "writes the summary. Install Claude from Google Play, then tap Claude again.")
+                .setPositiveButton("Open Google Play", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int w) {
                         ClaudeShare.openPlayStore(MainActivity.this);
@@ -671,7 +622,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
     private void print(final File file, final String jobName, final int pages) {
         PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
         if (pm == null) {
-            toast("Printing isn't available on this device.");
+            toast("Printing isn't available on this device");
             return;
         }
         pm.print(jobName, new PrintDocumentAdapter() {
@@ -718,8 +669,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
     // ---------------------------------------------------------------- Menu
 
     private void showMenu() {
-        final String[] items = {"Open a post link…", "X home", "Reload", "Theme: " + themeName(),
-                "Browser check", "Diagnostics", "Reset X session", "About XTract"};
+        final String[] items = {"Open a post link…", "X home", "Reload", "How it works"};
         new AlertDialog.Builder(this)
                 .setItems(items, new DialogInterface.OnClickListener() {
                     @Override
@@ -734,19 +684,6 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                             case 2:
                                 web.reload();
                                 break;
-                            case 3:
-                                showThemePicker();
-                                break;
-                            case 4:
-                                web.loadDataWithBaseURL("https://xtract.local/check",
-                                        WebViewDisguise.checkPageHtml(theme.dark), "text/html", "utf-8", null);
-                                break;
-                            case 5:
-                                showDiagnostics();
-                                break;
-                            case 6:
-                                confirmReset();
-                                break;
                             default:
                                 showAbout();
                                 break;
@@ -756,67 +693,15 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                 .show();
     }
 
-    private void confirmReset() {
-        new AlertDialog.Builder(this)
-                .setTitle("Reset X session?")
-                .setMessage("Logs out of X and clears everything the site stored in this app. "
-                        + "Use it when X says you are not allowed to log in.")
-                .setPositiveButton("Reset", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        resetSession("https://x.com/login");
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void showDiagnostics() {
-        TextView tv = new TextView(this);
-        tv.setText("DISGUISE\n" + WebViewDisguise.report() + "\nPAGE EVENTS\n" + Diag.dump());
-        tv.setTextIsSelectable(true);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        tv.setTypeface(Typeface.MONOSPACE);
-        tv.setTextColor(theme.text);
-        tv.setPadding(dp(18), dp(10), dp(18), dp(10));
-        android.widget.ScrollView sv = new android.widget.ScrollView(this);
-        sv.addView(tv);
-        new AlertDialog.Builder(this)
-                .setTitle("Diagnostics")
-                .setView(sv)
-                .setPositiveButton("Copy", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                        cm.setPrimaryClip(ClipData.newPlainText("XTract diagnostics",
-                                WebViewDisguise.report() + "\n" + Diag.dump()));
-                        toast("Copied");
-                    }
-                })
-                .setNeutralButton("Clear", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int w) {
-                        Diag.clear();
-                    }
-                })
-                .setNegativeButton("Close", null)
-                .show();
-    }
-
-    private String themeName() {
-        int i = Arrays.asList(AppTheme.IDS).indexOf(settings.theme());
-        return AppTheme.NAMES[Math.max(i, 0)];
-    }
-
     private void showOpenLink() {
         final EditText input = new EditText(this);
         input.setHint("https://x.com/user/status/…");
         input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         String fromClipboard = clipboardThreadUrl();
         if (fromClipboard != null) input.setText(fromClipboard);
         LinearLayout box = new LinearLayout(this);
-        box.setPadding(dp(20), dp(4), dp(20), 0);
+        box.setPadding(dp(22), dp(4), dp(22), 0);
         box.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         new AlertDialog.Builder(this)
                 .setTitle("Open a post")
@@ -826,7 +711,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                     @Override
                     public void onClick(DialogInterface d, int w) {
                         String url = ThreadData.findThreadUrl(input.getText().toString());
-                        if (url == null) toast("That isn't a link to an X post.");
+                        if (url == null) toast("That isn't a link to an X post");
                         else web.loadUrl(url);
                     }
                 })
@@ -846,36 +731,19 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         }
     }
 
-    private void showThemePicker() {
-        int current = Math.max(0, Arrays.asList(AppTheme.IDS).indexOf(settings.theme()));
-        new AlertDialog.Builder(this)
-                .setTitle("Theme")
-                .setSingleChoiceItems(AppTheme.NAMES, current, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface d, int which) {
-                        d.dismiss();
-                        if (!AppTheme.IDS[which].equals(settings.theme())) {
-                            settings.setTheme(AppTheme.IDS[which]);
-                            recreate();
-                        }
-                    }
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
     private void showAbout() {
         new AlertDialog.Builder(this)
-                .setTitle("XTract")
-                .setMessage("Open a post on X, then:\n\n"
-                        + "PDF — scrolls through every reply and saves the whole thread to Downloads/XTract.\n\n"
-                        + "Claude — collects the thread and sends it to the Claude app, which finds the trending "
-                        + "ideas and writes a summary.\n\n"
-                        + "Print — collects the thread and sends it to a printer or \"Save as PDF\".\n\n"
-                        + "The dial at the top shows progress while collecting or writing. Tap it to stop early "
-                        + "and keep what has loaded.\n\n"
+                .setTitle("How it works")
+                .setMessage("Open a post on X, then tap one of the buttons at the bottom. "
+                        + "Each one first scrolls through every reply to collect the whole thread.\n\n"
+                        + "PDF — saves the thread to Downloads/XTract.\n\n"
+                        + "Claude — sends the thread to the Claude app, which finds the trending ideas "
+                        + "and writes a summary.\n\n"
+                        + "Print — sends the thread to a printer or \"Save as PDF\".\n\n"
+                        + "The dial at the top shows progress while collecting or writing. "
+                        + "Tap it to stop early and keep what has loaded.\n\n"
                         + "Tip: in the X app, use Share → XTract on any post.")
-                .setPositiveButton("OK", null)
+                .setPositiveButton("Got it", null)
                 .show();
     }
 }

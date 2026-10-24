@@ -1,22 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Shown while the activity starts; MainActivity then applies XTractLight or XTractDark. -->
-    <style name="XTractLaunch" parent="@android:style/Theme.DeviceDefault.DayNight">
-        <item name="android:windowActionBar">false</item>
-        <item name="android:windowNoTitle">true</item>
-    </style>
-
-    <style name="XTractLight" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:colorPrimary">#1D9BF0</item>
-        <item name="android:colorAccent">#1D9BF0</item>
-        <item name="android:windowBackground">@android:color/white</item>
+    <!-- DeviceDefault picks up the phone's own dialog and control styling (Material You on Android 12+). -->
+    <style name="XTract" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@color/surface</item>
+        <item name="android:statusBarColor">@color/surface</item>
+        <item name="android:navigationBarColor">@color/surface</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-    </style>
-
-    <style name="XTractDark" parent="@android:style/Theme.Material.NoActionBar">
-        <item name="android:colorPrimary">#1D9BF0</item>
-        <item name="android:colorAccent">#1D9BF0</item>
-        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

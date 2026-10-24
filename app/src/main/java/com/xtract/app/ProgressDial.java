@@ -35,7 +35,7 @@ final class ProgressDial extends View {
     private float shown;      // fraction currently drawn
     private float spin;       // start angle of the indeterminate arc
     private ValueAnimator anim;
-    private int trackColor = 0xFFEFF3F4, accentColor = AppTheme.ACCENT, textColor = 0xFF0F1419;
+    private int trackColor = 0xFFEFF3F4, accentColor = 0xFF1D9BF0, textColor = 0xFF0F1419;
 
     ProgressDial(Context context) {
         super(context);
@@ -109,7 +109,7 @@ final class ProgressDial extends View {
     @Override
     protected void onDraw(Canvas c) {
         float w = getWidth(), h = getHeight();
-        float stroke = dp(3);
+        float stroke = dp(2.5f);
         float inset = stroke / 2f + dp(1);
         box.set(inset, inset, w - inset, h - inset);
         ring.setStrokeWidth(stroke);
