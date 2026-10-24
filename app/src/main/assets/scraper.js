@@ -145,6 +145,11 @@
     return list;
   }
 
+  function scrollFraction() {
+    var total = Math.max(1, document.documentElement.scrollHeight);
+    return Math.min(1, (window.scrollY + window.innerHeight) / total);
+  }
+
   function loading() {
     return !!column().querySelector('[role="progressbar"]');
   }
@@ -157,7 +162,7 @@
       var before = order;
       harvest();
       var clicks = expand();
-      bridge.progress(token, order, expanded);
+      bridge.progress(token, order, expanded, scrollFraction());
 
       var heading = discoverHeading();
       if (heading && heading.getBoundingClientRect().top < window.innerHeight) break;

@@ -12,8 +12,9 @@ const assert = require('assert');
   await page.goto('file://' + path.join(__dirname, 'mock-thread.html'));
   await page.evaluate(() => {
     window.__result = new Promise((resolve, reject) => {
+      window.__ticks = [];
       window.XTractBridge = {
-        progress() {},
+        progress(token, posts, expanded, fraction) { window.__ticks.push({ posts, fraction }); },
         done(token, json) { resolve({ token, posts: JSON.parse(json) }); },
         error(token, msg) { reject(new Error(msg)); },
       };
@@ -21,7 +22,13 @@ const assert = require('assert');
   });
   await page.evaluate(script.replace('__TOKEN__', '7'));
   const { token, posts } = await page.evaluate(() => window.__result);
+  const ticks = await page.evaluate(() => window.__ticks);
   await browser.close();
+
+  assert.ok(ticks.length > 5, 'progress reported while scrolling');
+  assert.ok(ticks.every(t => t.fraction >= 0 && t.fraction <= 1), 'fraction within 0..1');
+  assert.ok(ticks[ticks.length - 1].fraction > 0.9, 'reaches the bottom: ' + ticks[ticks.length - 1].fraction);
+  assert.ok(ticks[ticks.length - 1].posts >= ticks[0].posts, 'post count grows');
 
   const ids = posts.map(p => Number(p.url.split('/').pop()));
   assert.strictEqual(token, 7);

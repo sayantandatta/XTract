@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:colorPrimary">#0F1419</item>
-        <item name="android:colorPrimaryDark">#0F1419</item>
+    <!-- Shown while the activity starts; MainActivity then applies XTractLight or XTractDark. -->
+    <style name="XTractLaunch" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="XTractLight" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#1D9BF0</item>
         <item name="android:colorAccent">#1D9BF0</item>
-        <item name="android:statusBarColor">#0F1419</item>
-        <item name="android:navigationBarColor">#0F1419</item>
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+    <style name="XTractDark" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">#1D9BF0</item>
+        <item name="android:colorAccent">#1D9BF0</item>
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

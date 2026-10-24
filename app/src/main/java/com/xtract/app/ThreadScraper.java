@@ -18,7 +18,8 @@ import java.nio.charset.StandardCharsets;
 final class ThreadScraper {
 
     interface Listener {
-        void onScrapeProgress(int posts, int expanded);
+        /** {@code fraction} is how far down the page the collector has scrolled, 0..1. */
+        void onScrapeProgress(int posts, int expanded, double fraction);
 
         void onScrapeDone(String sourceUrl, String json);
 
@@ -65,12 +66,12 @@ final class ThreadScraper {
     // so a page cannot feed data into a run it did not start.
 
     @JavascriptInterface
-    public void progress(final int token, final int posts, final int expanded) {
+    public void progress(final int token, final int posts, final int expanded, final double fraction) {
         if (token != activeToken) return;
         ui.post(new Runnable() {
             @Override
             public void run() {
-                if (token == activeToken) listener.onScrapeProgress(posts, expanded);
+                if (token == activeToken) listener.onScrapeProgress(posts, expanded, fraction);
             }
         });
     }

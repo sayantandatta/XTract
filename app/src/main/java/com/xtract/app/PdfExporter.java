@@ -8,31 +8,54 @@ import android.graphics.Typeface;
 import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
 import android.text.Layout;
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
 import android.text.StaticLayout;
 import android.text.TextPaint;
-import android.text.style.StyleSpan;
 
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-/** Renders threads and summaries to A4 PDFs saved in Downloads/XTract. */
+/** Renders a collected thread to an A4 PDF, for saving to Downloads/XTract or printing. */
 final class PdfExporter {
 
     private static final int PAGE_W = 595, PAGE_H = 842, MARGIN = 44, FOOTER = 24;
     private static final int TEXT = Color.rgb(15, 20, 25);
     private static final int MUTED = Color.rgb(83, 100, 113);
     private static final int ACCENT = Color.rgb(29, 155, 240);
-    private static final Pattern BOLD = Pattern.compile("\\*\\*(.+?)\\*\\*|__(.+?)__");
+
+    interface Progress {
+        void onProgress(int done, int total);
+    }
+
+    /** A rendered PDF. Close it after writing. */
+    static final class Document implements Closeable {
+        private final PdfDocument doc;
+        final int pages;
+        final String fileName;
+
+        private Document(PdfDocument doc, int pages, String fileName) {
+            this.doc = doc;
+            this.pages = pages;
+            this.fileName = fileName;
+        }
+
+        void writeTo(OutputStream out) throws IOException {
+            doc.writeTo(out);
+        }
+
+        @Override
+        public void close() {
+            doc.close();
+        }
+    }
 
     private PdfExporter() {}
 
-    static Uri exportThread(Context ctx, ThreadData t) throws IOException {
+    static Document render(ThreadData t, Progress progress) {
         Writer w = new Writer(t.title());
         w.text(t.title(), w.paint(20, true, TEXT), 0, 4);
         w.text(t.sourceUrl, w.paint(9, false, ACCENT), 0, 2);
@@ -40,7 +63,8 @@ final class PdfExporter {
                 + "  ·  " + t.posts.size() + " posts, " + t.replyCount() + " replies", w.paint(9, false, MUTED), 0, 14);
 
         int fi = t.focalIndex();
-        for (int i = 0; i < t.posts.size(); i++) {
+        int total = t.posts.size();
+        for (int i = 0; i < total; i++) {
             ThreadData.Post p = t.posts.get(i);
             if (i == 0 && fi > 0) w.section("Earlier in thread");
             if (i == fi) w.section("Original post");
@@ -55,77 +79,29 @@ final class PdfExporter {
             if (meta.length() > 0) w.text(meta, w.paint(8.5f, false, MUTED), 0, 3);
             w.text(p.url, w.paint(7.5f, false, ACCENT), 0, 6);
             w.rule();
+            if (progress != null && (i % 10 == 9 || i == total - 1)) progress.onProgress(i + 1, total);
         }
-        return save(ctx, w, t.fileStem() + "-thread.pdf");
+        return new Document(w.build(), w.pageNo, t.fileStem() + "-thread.pdf");
     }
 
-    static Uri exportSummary(Context ctx, ThreadData t, String markdown, String model) throws IOException {
-        Writer w = new Writer("Summary: " + t.title());
-        w.text("Thread summary & trending ideas", w.paint(20, true, TEXT), 0, 4);
-        w.text(t.title(), w.paint(12, false, TEXT), 0, 2);
-        w.text(t.sourceUrl, w.paint(9, false, ACCENT), 0, 2);
-        w.text("Analysed " + t.posts.size() + " posts (" + t.replyCount() + " replies) with " + model + "  ·  "
-                + DateFormat.getDateTimeInstance().format(new Date()), w.paint(9, false, MUTED), 0, 14);
-        renderMarkdown(w, markdown);
-        return save(ctx, w, t.fileStem() + "-summary.pdf");
-    }
-
-    /** Minimal Markdown: headings, bullets, numbered lists, quotes, rules and **bold**. */
-    private static void renderMarkdown(Writer w, String md) {
-        for (String raw : md.replace("\r", "").split("\n")) {
-            String line = raw.trim();
-            if (line.isEmpty()) {
-                w.space(5);
-            } else if (line.matches("^(-{3,}|\\*{3,}|_{3,})$")) {
-                w.rule();
-            } else if (line.startsWith("#")) {
-                int level = 0;
-                while (level < line.length() && line.charAt(level) == '#') level++;
-                String h = line.substring(level).trim();
-                float size = level <= 1 ? 17 : level == 2 ? 14 : 12;
-                w.space(level <= 2 ? 8 : 4);
-                w.text(inline(h), w.paint(size, true, level == 2 ? ACCENT : TEXT), 0, 4);
-            } else if (line.matches("^[-*+]\\s+.*")) {
-                int indent = 10 + Math.min(raw.indexOf(line.charAt(0)), 8) * 4;
-                w.text(inline("•  " + line.substring(1).trim()), w.paint(10.5f, false, TEXT), indent, 3);
-            } else if (line.matches("^\\d+[.)]\\s+.*")) {
-                w.text(inline(line), w.paint(10.5f, false, TEXT), 10, 3);
-            } else if (line.startsWith(">")) {
-                w.text(inline(line.substring(1).trim()), w.italic(w.paint(10, false, MUTED)), 16, 3);
-            } else {
-                w.text(inline(line), w.paint(10.5f, false, TEXT), 0, 4);
-            }
-        }
-    }
-
-    private static CharSequence inline(String s) {
-        SpannableStringBuilder sb = new SpannableStringBuilder();
-        Matcher m = BOLD.matcher(s);
-        int last = 0;
-        while (m.find()) {
-            sb.append(s, last, m.start());
-            String inner = m.group(1) != null ? m.group(1) : m.group(2);
-            int start = sb.length();
-            sb.append(inner);
-            sb.setSpan(new StyleSpan(Typeface.BOLD), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            last = m.end();
-        }
-        sb.append(s, last, s.length());
-        // Drop leftover *emphasis* and `code` markers.
-        for (int i = sb.length() - 1; i >= 0; i--) {
-            char c = sb.charAt(i);
-            if (c == '`' || c == '*') sb.delete(i, i + 1);
-        }
-        return sb;
-    }
-
-    private static Uri save(Context ctx, final Writer w, String fileName) throws IOException {
-        return Downloads.save(ctx, fileName, "application/pdf", new Downloads.Body() {
+    static Uri saveToDownloads(Context ctx, final Document d) throws IOException {
+        return Downloads.save(ctx, d.fileName, "application/pdf", new Downloads.Body() {
             @Override
             public void writeTo(OutputStream out) throws IOException {
-                w.finish(out);
+                d.writeTo(out);
             }
         });
+    }
+
+    /** Writes the PDF to the app's private cache (for the print spooler) and returns the file. */
+    static File saveToCache(Context ctx, Document d) throws IOException {
+        File dir = new File(ctx.getCacheDir(), "print");
+        if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Could not create cache directory");
+        File f = new File(dir, d.fileName);
+        try (OutputStream out = new FileOutputStream(f)) {
+            d.writeTo(out);
+        }
+        return f;
     }
 
     /** Flows text top-to-bottom across pages, splitting paragraphs between lines when needed. */
@@ -135,7 +111,7 @@ final class PdfExporter {
         private PdfDocument.Page page;
         private Canvas canvas;
         private float y;
-        private int pageNo;
+        int pageNo;
 
         Writer(String footer) {
             this.footer = footer;
@@ -231,13 +207,10 @@ final class PdfExporter {
             page = null;
         }
 
-        void finish(OutputStream out) throws IOException {
-            closePage();
-            try {
-                doc.writeTo(out);
-            } finally {
-                doc.close();
-            }
+        /** Finishes the last page and hands over the document. */
+        PdfDocument build() {
+            if (page != null) closePage();
+            return doc;
         }
     }
 }
