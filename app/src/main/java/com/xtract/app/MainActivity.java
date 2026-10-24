@@ -30,12 +30,16 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
 import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
 import android.webkit.WebStorage;
+import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -367,6 +371,41 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
             public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
                 onUrlChanged(url, false); // X is a single-page app; most navigations only change history
             }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                Diag.add("loaded " + url);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest req, WebResourceError err) {
+                if (req.isForMainFrame()) {
+                    String msg = "page error " + err.getErrorCode() + " (" + err.getDescription() + ") on " + req.getUrl();
+                    Diag.add(msg);
+                    setCaption("Page didn't load — menu → Diagnostics", true);
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest req, WebResourceResponse resp) {
+                if (req.isForMainFrame()) {
+                    Diag.add("HTTP " + resp.getStatusCode() + " on " + req.getUrl());
+                    setCaption("X returned HTTP " + resp.getStatusCode() + " — menu → Diagnostics", true);
+                }
+            }
+        });
+
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage m) {
+                if (m.messageLevel() == ConsoleMessage.MessageLevel.ERROR
+                        || m.messageLevel() == ConsoleMessage.MessageLevel.WARNING) {
+                    String src = m.sourceId() == null ? "" : m.sourceId().replaceAll("^https?://", "");
+                    Diag.add(m.messageLevel() + ": " + m.message()
+                            + (src.isEmpty() ? "" : " [" + src + ":" + m.lineNumber() + "]"));
+                }
+                return true;
+            }
         });
     }
 
@@ -680,7 +719,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
 
     private void showMenu() {
         final String[] items = {"Open a post link…", "X home", "Reload", "Theme: " + themeName(),
-                "Browser check", "Reset X session", "About XTract"};
+                "Browser check", "Diagnostics", "Reset X session", "About XTract"};
         new AlertDialog.Builder(this)
                 .setItems(items, new DialogInterface.OnClickListener() {
                     @Override
@@ -703,6 +742,9 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                                         WebViewDisguise.checkPageHtml(theme.dark), "text/html", "utf-8", null);
                                 break;
                             case 5:
+                                showDiagnostics();
+                                break;
+                            case 6:
                                 confirmReset();
                                 break;
                             default:
@@ -726,6 +768,38 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                     }
                 })
                 .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showDiagnostics() {
+        TextView tv = new TextView(this);
+        tv.setText("DISGUISE\n" + WebViewDisguise.report() + "\nPAGE EVENTS\n" + Diag.dump());
+        tv.setTextIsSelectable(true);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        tv.setTypeface(Typeface.MONOSPACE);
+        tv.setTextColor(theme.text);
+        tv.setPadding(dp(18), dp(10), dp(18), dp(10));
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.addView(tv);
+        new AlertDialog.Builder(this)
+                .setTitle("Diagnostics")
+                .setView(sv)
+                .setPositiveButton("Copy", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                        cm.setPrimaryClip(ClipData.newPlainText("XTract diagnostics",
+                                WebViewDisguise.report() + "\n" + Diag.dump()));
+                        toast("Copied");
+                    }
+                })
+                .setNeutralButton("Clear", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        Diag.clear();
+                    }
+                })
+                .setNegativeButton("Close", null)
                 .show();
     }
 

@@ -98,8 +98,10 @@ npm i playwright && node test/scraper.test.js
   All but the first need a reasonably current Android System WebView (update it in Google Play if the message
   persists). When the disguise changes between app versions, the app starts from clean cookies so X does not
   reuse an earlier verdict. If the message still appears: title menu → *Reset X session*, wait fifteen minutes
-  (X also rate-limits repeated attempts and some VPN addresses), and try again. Title menu → *Browser check*
-  shows what X sees (user agent, client hints, headers as received by an echo server) for diagnosis.
+  (X also rate-limits repeated attempts and some VPN addresses), and try again. Two diagnostic views live in the
+  title menu: *Browser check* shows what X sees (user agent, client hints, headers as received by an echo
+  server), and *Diagnostics* shows which disguise steps applied plus recent page console/HTTP errors — useful
+  when a page loads blank.
 - Very large threads take a while to collect, roughly one screen per second.
 - The icons for PDF and Print are Material Design glyphs; the Claude button uses a generic starburst, not
   Anthropic's trademarked logo.
