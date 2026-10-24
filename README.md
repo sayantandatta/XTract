@@ -71,6 +71,10 @@ The script downloads the API 34 `android.jar` once and checks its SHA-256. To us
 **With Android Studio / Gradle**: open the folder, or run `./gradlew assembleDebug`. Output:
 `app/build/outputs/apk/debug/app-debug.apk`.
 
+**On GitHub**: `.github/workflows/build-apk.yml` runs the Gradle build on every push using the Android SDK that
+GitHub's runners already have. Open the **Actions** tab, pick the latest "Build APK" run and download the
+**XTract-apk** artifact (a zip containing the APK). "Run workflow" on that page starts a build by hand.
+
 The code is plain Java with no libraries (no AndroidX), so it has to stay free of lambdas and other Java 8
 language features that the `dx` dexer in the SDK-less build doesn't support.
 
