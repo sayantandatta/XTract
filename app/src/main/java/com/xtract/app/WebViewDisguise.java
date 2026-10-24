@@ -11,8 +11,11 @@ import org.chromium.support_lib_boundary.WebViewProviderFactoryBoundaryInterface
 import org.chromium.support_lib_boundary.WebkitToCompatConverterBoundaryInterface;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -35,7 +38,7 @@ import java.util.regex.Pattern;
 final class WebViewDisguise {
 
     /** Bump when the fingerprint changes; the app then starts from clean cookies so X re-evaluates it. */
-    static final int VERSION = 4;
+    static final int VERSION = 5;
 
     private static final String TAG = "XTract";
     private static final String GLUE_UTIL = "org.chromium.support_lib_glue.SupportLibReflectionUtil";
@@ -104,26 +107,82 @@ final class WebViewDisguise {
         note("glue: " + (features == null ? 0 : features.length) + " features");
         WebkitToCompatConverterBoundaryInterface converter =
                 proxy(WebkitToCompatConverterBoundaryInterface.class, factory.getWebkitToCompatConverter());
-        WebSettingsBoundaryInterface compat = proxy(WebSettingsBoundaryInterface.class, converter.convertSettings(settings));
-
-        // Attempt each call rather than gating on a feature-name string (those names vary by
-        // WebView build): if the method exists it works, otherwise it throws and we report why.
+        InvocationHandler settingsHandler = converter.convertSettings(settings);
+        WebSettingsBoundaryInterface compat = proxy(WebSettingsBoundaryInterface.class, settingsHandler);
+        Object delegate = null;
         try {
-            compat.setRequestedWithHeaderOriginAllowList(Collections.<String>emptySet());
-            note("X-Requested-With: removed");
+            delegate = settingsHandler.getClass().getMethod("getDelegate").invoke(settingsHandler);
         } catch (Throwable t) {
-            note("X-Requested-With FAILED: " + cause(t));
+            note("settings delegate: " + cause(t));
         }
 
+        // X-Requested-With: the androidx boundary call first; if this WebView lacks that exact
+        // signature, fall back to whatever setRequestedWithHeaderOriginAllowList the real settings
+        // object exposes (the parameter type has changed between Set/List across builds).
+        boolean xrw = false;
+        try {
+            compat.setRequestedWithHeaderOriginAllowList(Collections.<String>emptySet());
+            note("X-Requested-With: removed (boundary)");
+            xrw = true;
+        } catch (Throwable t) {
+            note("X-Requested-With boundary FAILED: " + cause(t));
+        }
+        if (!xrw && delegate != null) {
+            Method m = method1(delegate, "setRequestedWithHeaderOriginAllowList");
+            Method mode = method1(delegate, "setRequestedWithHeaderMode");
+            try {
+                if (m != null) {
+                    Class<?> pt = m.getParameterTypes()[0];
+                    Object empty = pt.isAssignableFrom(HashSet.class) ? new HashSet<String>()
+                            : pt.isAssignableFrom(ArrayList.class) ? new ArrayList<String>() : null;
+                    if (empty == null) {
+                        note("X-Requested-With: unexpected param " + pt.getName());
+                    } else {
+                        m.setAccessible(true);
+                        m.invoke(delegate, empty);
+                        note("X-Requested-With: removed (delegate allowlist " + pt.getSimpleName() + ")");
+                    }
+                } else if (mode != null && mode.getParameterTypes()[0] == int.class) {
+                    mode.setAccessible(true);
+                    mode.invoke(delegate, 0); // 0 = NO_HEADER
+                    note("X-Requested-With: removed (delegate mode=0)");
+                } else {
+                    note("X-Requested-With methods: " + listMethods(delegate, "equested|eader"));
+                }
+            } catch (Throwable t) {
+                note("X-Requested-With delegate FAILED: " + cause(t));
+            }
+        }
+
+        // Client-hint brand: same two-step approach.
+        boolean ch = false;
         try {
             Map<String, Object> md = compat.getUserAgentMetadataMap();
             int renamed = renameBrandInPlace(md);
-            // Pass the glue's own map back untouched except for the brand strings, so the value
-            // types stay exactly what the marshaller expects.
-            compat.setUserAgentMetadataMap(md);
-            note("client hints: Chrome brands (" + renamed + " renamed)");
+            compat.setUserAgentMetadataMap(md); // glue's own map, only brand strings changed
+            note("client hints: Chrome brands (" + renamed + ") (boundary)");
+            ch = true;
         } catch (Throwable t) {
-            note("client hints FAILED: " + cause(t));
+            note("client hints boundary FAILED: " + cause(t));
+        }
+        if (!ch && delegate != null) {
+            Method getter = method0(delegate, "getUserAgentMetadataMap");
+            Method setter = method1(delegate, "setUserAgentMetadataMap");
+            if (getter == null || setter == null) {
+                note("client-hint methods: " + listMethods(delegate, "serAgent|etadata"));
+            } else {
+                try {
+                    getter.setAccessible(true);
+                    setter.setAccessible(true);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> md = (Map<String, Object>) getter.invoke(delegate);
+                    int renamed = renameBrandInPlace(md);
+                    setter.invoke(delegate, md);
+                    note("client hints: Chrome brands (" + renamed + ") (delegate)");
+                } catch (Throwable t) {
+                    note("client hints delegate FAILED: " + cause(t));
+                }
+            }
         }
 
         try {
@@ -160,6 +219,39 @@ final class WebViewDisguise {
             }
         }
         return renamed;
+    }
+
+    /** First public method on {@code o} named {@code name} that takes one argument. */
+    private static Method method1(Object o, String name) {
+        for (Method m : o.getClass().getMethods()) {
+            if (m.getName().equals(name) && m.getParameterTypes().length == 1) return m;
+        }
+        return null;
+    }
+
+    /** First public method on {@code o} named {@code name} that takes no arguments. */
+    private static Method method0(Object o, String name) {
+        for (Method m : o.getClass().getMethods()) {
+            if (m.getName().equals(name) && m.getParameterTypes().length == 0) return m;
+        }
+        return null;
+    }
+
+    /** Names (with parameter types) of the object's methods matching {@code regex}, for diagnosis. */
+    private static String listMethods(Object o, String regex) {
+        Pattern p = Pattern.compile(regex);
+        StringBuilder sb = new StringBuilder();
+        for (Method m : o.getClass().getMethods()) {
+            if (!p.matcher(m.getName()).find()) continue;
+            sb.append(m.getName()).append('(');
+            Class<?>[] pt = m.getParameterTypes();
+            for (int i = 0; i < pt.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(pt[i].getSimpleName());
+            }
+            sb.append(") ");
+        }
+        return sb.length() == 0 ? "(none)" : sb.toString().trim();
     }
 
     /** The message of the deepest cause, so a wrapped "Reflection failed" reports the real reason. */
