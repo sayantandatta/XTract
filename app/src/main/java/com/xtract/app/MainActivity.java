@@ -34,6 +34,8 @@ import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.ValueCallback;
+import android.webkit.WebStorage;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -98,9 +100,33 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         clearPrintCache();
 
         String shared = sharedThreadUrl(getIntent());
-        if (state != null) web.restoreState(state);
-        if (shared != null) web.loadUrl(shared);
-        else if (state == null) web.loadUrl(settings.lastUrl());
+        if (settings.disguiseVersion() != WebViewDisguise.VERSION) {
+            // The browser fingerprint changed. X may have flagged the old one in its cookies,
+            // so start this version from a clean session.
+            settings.setDisguiseVersion(WebViewDisguise.VERSION);
+            resetSession(shared != null ? shared : settings.lastUrl());
+        } else {
+            if (state != null) web.restoreState(state);
+            if (shared != null) web.loadUrl(shared);
+            else if (state == null) web.loadUrl(settings.lastUrl());
+        }
+    }
+
+    /** Clears cookies, storage and cache (logs out of X), then loads {@code thenLoad}. */
+    private void resetSession(final String thenLoad) {
+        thread = null;
+        WebStorage.getInstance().deleteAllData();
+        web.clearCache(true);
+        web.clearHistory();
+        final CookieManager cm = CookieManager.getInstance();
+        cm.removeAllCookies(new ValueCallback<Boolean>() {
+            @Override
+            public void onReceiveValue(Boolean removed) {
+                cm.flush();
+                syncXTheme();
+                web.loadUrl(thenLoad);
+            }
+        });
     }
 
     @Override
@@ -663,7 +689,8 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
     // ---------------------------------------------------------------- Menu
 
     private void showMenu() {
-        final String[] items = {"Open a post link…", "X home", "Reload", "Theme: " + themeName(), "About XTract"};
+        final String[] items = {"Open a post link…", "X home", "Reload", "Theme: " + themeName(),
+                "Browser check", "Reset X session", "About XTract"};
         new AlertDialog.Builder(this)
                 .setItems(items, new DialogInterface.OnClickListener() {
                     @Override
@@ -681,12 +708,34 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                             case 3:
                                 showThemePicker();
                                 break;
+                            case 4:
+                                web.loadDataWithBaseURL("https://xtract.local/check",
+                                        WebViewDisguise.checkPageHtml(theme.dark), "text/html", "utf-8", null);
+                                break;
+                            case 5:
+                                confirmReset();
+                                break;
                             default:
                                 showAbout();
                                 break;
                         }
                     }
                 })
+                .show();
+    }
+
+    private void confirmReset() {
+        new AlertDialog.Builder(this)
+                .setTitle("Reset X session?")
+                .setMessage("Logs out of X and clears everything the site stored in this app. "
+                        + "Use it when X says you are not allowed to log in.")
+                .setPositiveButton("Reset", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        resetSession("https://x.com/login");
+                    }
+                })
+                .setNegativeButton("Cancel", null)
                 .show();
     }
 

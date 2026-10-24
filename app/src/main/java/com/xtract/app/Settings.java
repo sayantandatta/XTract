@@ -20,6 +20,14 @@ final class Settings {
         prefs.edit().putString("theme", id).apply();
     }
 
+    int disguiseVersion() {
+        return prefs.getInt("disguise", 0);
+    }
+
+    void setDisguiseVersion(int v) {
+        prefs.edit().putInt("disguise", v).apply();
+    }
+
     String lastUrl() {
         return prefs.getString("last_url", "https://x.com/home");
     }
