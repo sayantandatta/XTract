@@ -231,7 +231,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         tv.setTextColor(theme.text);
         tv.setPadding(0, dp(3), 0, 0);
-        cell.addView(tv);
+        cell.addView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         cell.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -306,8 +306,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         s.setSupportMultipleWindows(false);
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
-        // Some sites refuse embedded WebViews; present as the regular mobile Chrome build.
-        s.setUserAgentString(s.getUserAgentString().replace("; wv", ""));
+        WebViewDisguise.apply(web); // X refuses to log in from anything it recognises as a WebView
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
 

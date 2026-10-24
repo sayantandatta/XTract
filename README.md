@@ -92,6 +92,11 @@ npm i playwright && node test/scraper.test.js
 - The collector depends on X's page markup (`article[data-testid="tweet"]`, `tweetText`, `User-Name`). If X
   changes its markup, update `app/src/main/assets/scraper.js`.
 - "Sign in with Google" doesn't work inside embedded browsers. Use your X username and password.
+- X refuses logins from anything it recognises as an embedded browser ("Sorry, you are not allowed to log in at
+  this time"). `WebViewDisguise.java` removes the three tells: the WebView user-agent string, the
+  `X-Requested-With` header and the `Android WebView` client-hint brand. The last two need a reasonably current
+  Android System WebView (update it in Google Play if the message persists). X also shows the same message after
+  several failed attempts or from VPN addresses; waiting fifteen minutes clears that.
 - Very large threads take a while to collect, roughly one screen per second.
 - The icons for PDF and Print are Material Design glyphs; the Claude button uses a generic starburst, not
   Anthropic's trademarked logo.
