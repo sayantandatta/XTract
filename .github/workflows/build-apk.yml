@@ -19,7 +19,12 @@ jobs:
           java-version: 17
           cache: gradle
 
-      - uses: android-actions/setup-android@v3   # sets ANDROID_HOME and accepts SDK licences
+      # Sets ANDROID_HOME and accepts SDK licences. Its default package list includes the
+      # retired "tools" package, which makes sdkmanager fail, so name the real ones.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-34 build-tools;34.0.0
+          log-accepted-android-sdk-licenses: false
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
