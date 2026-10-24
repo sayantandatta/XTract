@@ -1,0 +1,42 @@
+// Android Studio / Gradle build. scripts/build-apk.sh builds the same APK without the SDK manager.
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.xtract.app"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.xtract.app"
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        // Shared debug key so APKs from either build path install over each other.
+        localDebug {
+            storeFile rootProject.file("keystore/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.localDebug
+        }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.localDebug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}

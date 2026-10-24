@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=400">
+<title>Mock X thread</title>
+<style>article{height:220px;border-bottom:1px solid #ccc;padding:8px} body{margin:0}</style></head>
+<body><main><div data-testid="primaryColumn"><div id="list"></div></div></main>
+<script>
+// Mimics X: virtualised list, lazy loading, a "Show more replies" cell, an ad, and a "Discover more" section.
+var TOTAL = 60, loaded = 0, hiddenShown = false;
+function post(i, opts) {
+  opts = opts || {};
+  var a = document.createElement('article');
+  a.setAttribute('data-testid', 'tweet');
+  a.dataset.idx = i;
+  var who = opts.ad ? 'Brand' : 'User ' + i;
+  var html = '<div data-testid="User-Name"><span>' + who + '</span>\n<span>@user' + i + '</span><span>·</span></div>';
+  if (!opts.ad) html += '<a href="https://x.com/user' + i + '/status/' + (1000 + i) + '?s=20"><time datetime="2026-10-2' + (i % 9) + 'T12:00:00.000Z">Oct</time></a>';
+  html += '<div data-testid="tweetText"><span>Reply number ' + i + ' says idea ' + (i % 3) + ' </span><img alt="🔥"><span> ok</span></div>';
+  if (opts.quote) html += '<div role="link"><div data-testid="User-Name">Q</div><a href="https://x.com/q/status/1"><time datetime="2020-01-01T00:00:00Z">x</time></a><div data-testid="tweetText">quoted words</div></div>';
+  html += '<div role="group" aria-label="' + i + ' replies, 2 reposts, ' + (i * 3) + ' likes"></div>';
+  if (i % 7 === 0) html += '<div data-testid="tweetPhoto"></div>';
+  html += '<div role="button">Show more</div>'; // inside a post: must NOT be clicked
+  a.innerHTML = html;
+  return a;
+}
+var list = document.getElementById('list');
+function append(n) {
+  for (var k = 0; k < n && loaded < TOTAL; k++) {
+    loaded++;
+    list.appendChild(post(loaded, {quote: loaded === 4}));
+    if (loaded === 10) list.appendChild(post(999, {ad: true}));
+    if (loaded === 20) {
+      var b = document.createElement('div'); b.setAttribute('role', 'button'); b.textContent = 'Show more replies';
+      b.onclick = function () { b.remove(); hiddenShown = true;
+        for (var h = 1; h <= 3; h++) list.appendChild(post(500 + h)); };
+      list.appendChild(b);
+    }
+  }
+  if (loaded >= TOTAL && !document.getElementById('disc')) {
+    var h = document.createElement('h2'); h.id = 'disc'; h.textContent = 'Discover more'; list.appendChild(h);
+    for (var d = 0; d < 5; d++) list.appendChild(post(700 + d));
+  }
+}
+append(8);
+window.addEventListener('scroll', function () {
+  if (innerHeight + scrollY > document.documentElement.scrollHeight - 300) setTimeout(function(){append(6)}, 150);
+  // virtualise: replace far-above posts with spacers of equal height
+  document.querySelectorAll('article').forEach(function (a) {
+    var r = a.getBoundingClientRect();
+    if (r.bottom < -1500) { var s = document.createElement('div'); s.style.height = r.height + 'px'; a.replaceWith(s); }
+  });
+});
+</script></body></html>
