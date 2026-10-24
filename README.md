@@ -35,10 +35,10 @@ prepared for printing.
 
 ## Look and feel
 
-The app chrome uses X's own colour schemes. Tap the title → *Theme* to choose **Light**, **Dim**, **Lights out**
-or **Follow system**. The x.com page inside the app is switched to the same scheme, so there is no seam between
-the app and the page. (It does this by setting X's `night_mode` cookie; if you change the theme inside X's own
-settings, XTract puts it back next time it starts.)
+The app's own bars use X's colour schemes. Tap the title → *Theme* to choose **Light** (the default), **Dim**,
+**Lights out** or **Follow system**. The x.com page inside keeps whatever display setting your X account has
+(X → Settings → Display), so pick the matching one there if you want the two to blend. The app deliberately
+does not touch X's cookies.
 
 Links that lead away from X open in your phone's browser. Hardware/gesture back goes back inside X.
 
@@ -110,6 +110,7 @@ npm i playwright && node test/scraper.test.js
 app/src/main/
   AndroidManifest.xml
   assets/scraper.js            auto-scroll + collect script injected into x.com
+  java/org/chromium/support_lib_boundary/  WebView support-library boundary interfaces (names must match)
   java/com/xtract/app/
     MainActivity.java          screen, actions, jobs (collect → PDF / Claude / print)
     ProgressDial.java          the ring in the top bar

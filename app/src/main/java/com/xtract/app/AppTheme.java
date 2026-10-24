@@ -3,7 +3,7 @@ package com.xtract.app;
 import android.content.Context;
 import android.content.res.Configuration;
 
-/** The three X colour schemes (Light, Dim, Lights out), applied to the app chrome and the x.com page. */
+/** X's three colour schemes (Light, Dim, Lights out) for the app's own bars. The x.com page keeps the account's display setting. */
 final class AppTheme {
 
     static final String SYSTEM = "system", LIGHT = "light", DIM = "dim", DARK = "dark";
@@ -18,10 +18,8 @@ final class AppTheme {
     final boolean dark;
     final int styleRes;
     final int background, text, muted, border;
-    /** Value of x.com's {@code night_mode} cookie that renders the same scheme. */
-    final int xNightMode;
 
-    private AppTheme(String id, boolean dark, int styleRes, int background, int text, int muted, int border, int xNightMode) {
+    private AppTheme(String id, boolean dark, int styleRes, int background, int text, int muted, int border) {
         this.id = id;
         this.dark = dark;
         this.styleRes = styleRes;
@@ -29,7 +27,6 @@ final class AppTheme {
         this.text = text;
         this.muted = muted;
         this.border = border;
-        this.xNightMode = xNightMode;
     }
 
     static AppTheme resolve(Context ctx, String id) {
@@ -39,11 +36,11 @@ final class AppTheme {
         }
         switch (id) {
             case DIM:
-                return new AppTheme(DIM, true, R.style.XTractDark, 0xFF15202B, 0xFFF7F9F9, 0xFF8B98A5, 0xFF38444D, 1);
+                return new AppTheme(DIM, true, R.style.XTractDark, 0xFF15202B, 0xFFF7F9F9, 0xFF8B98A5, 0xFF38444D);
             case DARK:
-                return new AppTheme(DARK, true, R.style.XTractDark, 0xFF000000, 0xFFE7E9EA, 0xFF71767B, 0xFF2F3336, 2);
+                return new AppTheme(DARK, true, R.style.XTractDark, 0xFF000000, 0xFFE7E9EA, 0xFF71767B, 0xFF2F3336);
             default:
-                return new AppTheme(LIGHT, false, R.style.XTractLight, 0xFFFFFFFF, 0xFF0F1419, 0xFF536471, 0xFFEFF3F4, 0);
+                return new AppTheme(LIGHT, false, R.style.XTractLight, 0xFFFFFFFF, 0xFF0F1419, 0xFF536471, 0xFFEFF3F4);
         }
     }
 }

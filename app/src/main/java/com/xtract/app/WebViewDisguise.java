@@ -5,6 +5,11 @@ import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
+import org.chromium.support_lib_boundary.WebSettingsBoundaryInterface;
+import org.chromium.support_lib_boundary.WebViewProviderBoundaryInterface;
+import org.chromium.support_lib_boundary.WebViewProviderFactoryBoundaryInterface;
+import org.chromium.support_lib_boundary.WebkitToCompatConverterBoundaryInterface;
+
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
@@ -23,14 +28,15 @@ import java.util.regex.Pattern;
  * "Android WebView" brand in the Sec-CH-UA client hints, and the missing {@code window.chrome}
  * object that Chrome exposes to pages. The first is a public API; the rest live behind the
  * WebView support-library glue, which this class reaches the same way androidx.webkit does
- * (public WebView API + reflection into the WebView package), so the app stays dependency-free.
+ * (public WebView API + reflection into the WebView package, through the boundary interfaces
+ * in org.chromium.support_lib_boundary), so the app stays dependency-free.
  * Everything is best effort: on an old WebView the login block may remain, nothing else breaks.
  * {@link #report()} says what was and wasn't applied.
  */
 final class WebViewDisguise {
 
     /** Bump when the fingerprint changes; the app then starts from clean cookies so X re-evaluates it. */
-    static final int VERSION = 2;
+    static final int VERSION = 3;
 
     private static final String TAG = "XTract";
     private static final String GLUE_UTIL = "org.chromium.support_lib_glue.SupportLibReflectionUtil";
@@ -56,32 +62,6 @@ final class WebViewDisguise {
             + "wasAlternateProtocolAvailable:false,connectionInfo:'h2'}}};"
             + "Object.defineProperty(window,'chrome',{value:c,writable:true,enumerable:true,configurable:true});"
             + "})();";
-
-    // Local mirrors of the support-library boundary interfaces. The glue dispatches by method
-    // name and parameter types, so only the signatures have to match, not the interface names.
-    interface ProviderFactory {
-        String[] getSupportedFeatures();
-
-        InvocationHandler getWebkitToCompatConverter();
-
-        InvocationHandler createWebView(WebView webView);
-    }
-
-    interface Converter {
-        InvocationHandler convertSettings(WebSettings settings);
-    }
-
-    interface SettingsCompat {
-        void setRequestedWithHeaderOriginAllowList(Set<String> allowList);
-
-        Map<String, Object> getUserAgentMetadataMap();
-
-        void setUserAgentMetadataMap(Map<String, Object> metadata);
-    }
-
-    interface WebViewCompat {
-        InvocationHandler addDocumentStartJavaScript(String script, String[] allowedOriginRules);
-    }
 
     private static final StringBuilder report = new StringBuilder();
 
@@ -123,11 +103,12 @@ final class WebViewDisguise {
         ClassLoader cl = WebView.getWebViewClassLoader();
         Class<?> util = Class.forName(GLUE_UTIL, false, cl);
         InvocationHandler factoryHandler = (InvocationHandler) util.getDeclaredMethod("createWebViewProviderFactory").invoke(null);
-        ProviderFactory factory = proxy(ProviderFactory.class, factoryHandler);
+        WebViewProviderFactoryBoundaryInterface factory = proxy(WebViewProviderFactoryBoundaryInterface.class, factoryHandler);
         String[] features = factory.getSupportedFeatures();
         note("glue: " + (features == null ? 0 : features.length) + " features");
-        Converter converter = proxy(Converter.class, factory.getWebkitToCompatConverter());
-        SettingsCompat compat = proxy(SettingsCompat.class, converter.convertSettings(settings));
+        WebkitToCompatConverterBoundaryInterface converter =
+                proxy(WebkitToCompatConverterBoundaryInterface.class, factory.getWebkitToCompatConverter());
+        WebSettingsBoundaryInterface compat = proxy(WebSettingsBoundaryInterface.class, converter.convertSettings(settings));
 
         if (has(features, FEATURE_XRW)) {
             try {
@@ -153,7 +134,7 @@ final class WebViewDisguise {
 
         if (has(features, FEATURE_DOC_START)) {
             try {
-                WebViewCompat wv = proxy(WebViewCompat.class, factory.createWebView(web));
+                WebViewProviderBoundaryInterface wv = proxy(WebViewProviderBoundaryInterface.class, factory.createWebView(web));
                 wv.addDocumentStartJavaScript(CHROME_OBJECT_SCRIPT, new String[]{"*"});
                 note("window.chrome: provided");
             } catch (Throwable t) {

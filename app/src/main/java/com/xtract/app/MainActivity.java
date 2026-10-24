@@ -96,7 +96,6 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
         getWindow().setStatusBarColor(theme.background);
         getWindow().setNavigationBarColor(theme.background);
         setupWebView();
-        syncXTheme();
         clearPrintCache();
 
         String shared = sharedThreadUrl(getIntent());
@@ -123,7 +122,6 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
             @Override
             public void onReceiveValue(Boolean removed) {
                 cm.flush();
-                syncXTheme();
                 web.loadUrl(thenLoad);
             }
         });
@@ -388,14 +386,6 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
             scraper.cancel();
             failJob("Cancelled: the page changed.");
         }
-    }
-
-    /** Sets x.com's own theme cookie so the page matches the app chrome. */
-    private void syncXTheme() {
-        CookieManager cm = CookieManager.getInstance();
-        String value = "night_mode=" + theme.xNightMode + "; Path=/; Secure; Max-Age=31536000";
-        cm.setCookie("https://x.com", value + "; Domain=.x.com");
-        cm.setCookie("https://twitter.com", value + "; Domain=.twitter.com");
     }
 
     private static String sharedThreadUrl(Intent intent) {
@@ -792,7 +782,7 @@ public class MainActivity extends Activity implements ThreadScraper.Listener {
                         d.dismiss();
                         if (!AppTheme.IDS[which].equals(settings.theme())) {
                             settings.setTheme(AppTheme.IDS[which]);
-                            recreate(); // re-themes the chrome and reloads X with the matching cookie
+                            recreate();
                         }
                     }
                 })

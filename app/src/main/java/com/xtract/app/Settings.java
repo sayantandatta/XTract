@@ -13,7 +13,7 @@ final class Settings {
     }
 
     String theme() {
-        return prefs.getString("theme", AppTheme.SYSTEM);
+        return prefs.getString("theme", AppTheme.LIGHT);
     }
 
     void setTheme(String id) {
